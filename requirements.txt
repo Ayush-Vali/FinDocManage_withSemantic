@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+pyjwt
+langchain
+langchain-text-splitters
+langchain-huggingface
+langchain-chroma
+sentence-transformers
+chromadb
