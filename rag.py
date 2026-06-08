@@ -29,7 +29,7 @@ reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 
 def index_document_content(document_id, title, company_name, document_type, content) -> int:
-    doc_id = int(document_id)  # always store as int so where-filter type matches on retrieval
+    doc_id = int(document_id) 
     docs = splitter.create_documents(
         texts     = [content],
         metadatas = [{"document_id": doc_id, "title": title,
@@ -44,7 +44,7 @@ def index_document_content(document_id, title, company_name, document_type, cont
 
 
 def remove_document_embeddings(document_id) -> int:
-    doc_id = int(document_id)  # cast to int — must match the type stored in metadata
+    doc_id = int(document_id) 
     result = vector_store.get(where={"document_id": doc_id})
     ids    = result.get("ids", [])
     if not ids:
@@ -78,7 +78,7 @@ def semantic_search(query: str, top_k: int = 5) -> list[dict]:
 
 
 def get_document_chunks(document_id) -> list[dict]:
-    doc_id = int(document_id)  # cast to int — must match the type stored in metadata
+    doc_id = int(document_id) 
     result = vector_store.get(
         where   = {"document_id": doc_id},
         include = ["documents", "metadatas"]
