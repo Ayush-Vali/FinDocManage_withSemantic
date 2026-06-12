@@ -1,392 +1,309 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FinDoc — Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg:#0d0f12; --surface:#13161b; --surface2:#191d25; --border:#1f2430;
-    --gold:#c9a84c; --gold-dim:#8a6f2e; --text:#e8e2d9; --muted:#6b7280;
-    --error:#e05252; --success:#52a878; --info:#5294e0; --radius:6px;
-  }
-  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; display:grid; grid-template-columns:220px 1fr; grid-template-rows:56px 1fr; }
+<!doctype html>
+<html>
+  <head>
+    <title>FinDoc - Dashboard</title>
+  </head>
+  <body>
+    <h2>FinDoc Dashboard</h2>
+    <p>
+      Logged in as: <strong id="whoami"></strong> -
+      <a href="#" onclick="logout()">Logout</a>
+    </p>
 
-  /* Topbar */
-  .topbar { grid-column:1/-1; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 28px; }
-  .logo { display:flex; align-items:center; gap:10px; font-family:'DM Serif Display',serif; font-size:18px; letter-spacing:.06em; }
-  .logo-icon { width:30px; height:30px; border:1.5px solid var(--gold); border-radius:4px; display:grid; place-items:center; color:var(--gold); font-family:'DM Serif Display',serif; font-size:15px; }
-  .topbar-right { display:flex; align-items:center; gap:20px; }
-  .user-badge { font-size:12px; color:var(--muted); font-family:'DM Mono',monospace; }
-  .user-badge span { color:var(--gold); }
-  .logout-btn { background:none; border:1px solid var(--border); color:var(--muted); padding:5px 14px; border-radius:var(--radius); cursor:pointer; font-size:12px; transition:all .2s; }
-  .logout-btn:hover { border-color:var(--error); color:var(--error); }
+    <p>
+      Jump to:
+      <a href="#roles">Roles</a> | <a href="#documents">Documents</a> |
+      <a href="#search">Metadata Search</a> |
+      <a href="#rag_search">Semantic Search</a> |
+      <a href="#rag_chunks">View Chunks</a>
+    </p>
+    <hr />
 
-  /* Sidebar */
-  .sidebar { background:var(--surface); border-right:1px solid var(--border); padding:24px 0; overflow-y:auto; }
-  .nav-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-family:'DM Mono',monospace; padding:0 20px; margin:20px 0 8px; }
-  .nav-item { display:flex; align-items:center; gap:10px; padding:9px 20px; cursor:pointer; font-size:13px; color:var(--muted); transition:all .15s; border-left:2px solid transparent; }
-  .nav-item:hover { color:var(--text); background:rgba(255,255,255,.03); }
-  .nav-item.active { color:var(--gold); border-left-color:var(--gold); background:rgba(201,168,76,.06); }
+    <!-- ROLES -->
+    <h3 id="roles">Roles</h3>
 
-  /* Main */
-  .main { overflow-y:auto; padding:32px 36px; }
-  .panel { display:none; }
-  .panel.active { display:block; animation:fadeIn .2s ease; }
-  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
-  .panel-title { font-family:'DM Serif Display',serif; font-size:24px; margin-bottom:6px; }
-  .panel-desc { font-size:13px; color:var(--muted); margin-bottom:28px; line-height:1.6; }
+    <b>Create Role - POST /roles/create</b><br />
+    <input
+      type="text"
+      id="role_name"
+      placeholder="Role name e.g. Auditor"
+    /><br />
+    <input
+      type="text"
+      id="role_perms"
+      placeholder="Permissions e.g. view,download"
+    /><br />
+    <button onclick="createRole()">Create Role</button>
+    <pre id="role_res"></pre>
 
-  /* Cards */
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; margin-bottom:20px; }
-  .card-title { font-size:11px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:var(--gold); font-family:'DM Mono',monospace; margin-bottom:18px; }
+    <b>Assign Role to User - POST /users/assign-role</b><br />
+    User ID: <input type="number" id="assign_uid" size="5" /> Role ID:
+    <input type="number" id="assign_rid" size="5" /><br />
+    <button onclick="assignRole()">Assign</button>
+    <pre id="assign_res"></pre>
 
-  /* Fields */
-  .field { margin-bottom:14px; }
-  .field label { display:block; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-family:'DM Mono',monospace; margin-bottom:7px; }
-  .field input, .field select, .field textarea { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:'DM Sans',sans-serif; font-size:13px; padding:9px 12px; outline:none; transition:border-color .2s; }
-  .field textarea { height:90px; resize:vertical; }
-  .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--gold-dim); }
-  .field input::placeholder, .field textarea::placeholder { color:var(--muted); opacity:.5; }
-  select option { background:var(--surface2); }
+    <b>View Roles / Permissions - GET /users/{id}/roles|permissions</b><br />
+    User ID: <input type="number" id="view_uid" size="5" /><br />
+    <button onclick="getUserRoles()">Get Roles</button>
+    <button onclick="getUserPerms()">Get Permissions</button>
+    <pre id="view_res"></pre>
+    <hr />
 
-  /* Buttons */
-  .btn-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
-  .btn { padding:9px 18px; border:none; border-radius:var(--radius); font-family:'DM Sans',sans-serif; font-size:13px; cursor:pointer; transition:all .15s; }
-  .btn-primary { background:var(--gold); color:#0d0f12; font-weight:500; }
-  .btn-primary:hover { background:#dbb85a; }
-  .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
-  .btn-ghost:hover { color:var(--text); border-color:#2a3040; }
-  .btn-danger { background:transparent; color:var(--error); border:1px solid rgba(224,82,82,.3); }
-  .btn-danger:hover { background:rgba(224,82,82,.08); }
-  .btn-rag { background:rgba(82,148,224,.12); color:var(--info); border:1px solid rgba(82,148,224,.25); }
-  .btn-rag:hover { background:rgba(82,148,224,.2); }
+    <!--DOCUMENTS -->
+    <h3 id="documents">Documents</h3>
 
-  /* Response */
-  .res { margin-top:14px; padding:14px 16px; border-radius:var(--radius); font-family:'DM Mono',monospace; font-size:12px; line-height:1.7; white-space:pre-wrap; word-break:break-all; max-height:320px; overflow-y:auto; display:none; }
-  .res.ok  { background:rgba(82,168,120,.06); border:1px solid rgba(82,168,120,.2); color:#7ecba0; display:block; }
-  .res.err { background:rgba(224,82,82,.06);  border:1px solid rgba(224,82,82,.2);  color:#e07070; display:block; }
+    <b>Upload Document - POST /documents/upload</b><br />
+    <small>Also auto-indexes into FAISS for semantic search.</small><br /><br />
+    Title: <input type="text" id="doc_title" placeholder="Q3 Report" /><br />
+    Company:
+    <input type="text" id="doc_company" placeholder="Acme Corp" /><br />
+    Type:
+    <select id="doc_type">
+      <option value="invoice">Invoice</option>
+      <option value="report">Report</option>
+      <option value="contract">Contract</option></select
+    ><br />
+    Content:<br />
+    <textarea
+      id="doc_content"
+      rows="6"
+      cols="60"
+      placeholder="Paste document text here..."
+    ></textarea
+    ><br />
+    <button onclick="uploadDoc()">Upload</button>
+    <pre id="upload_res"></pre>
 
-  /* RAG result cards */
-  .result-card { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-top:10px; }
-  .result-card-title { font-weight:500; font-size:14px; margin-bottom:4px; }
-  .result-card-meta { font-size:11px; color:var(--muted); font-family:'DM Mono',monospace; }
-  .result-card-score { margin-top:8px; font-size:11px; font-family:'DM Mono',monospace; color:var(--muted); }
-  .result-card-score span { color:var(--info); }
-  .result-card-chunk { margin-top:10px; padding:10px 12px; background:rgba(255,255,255,.03); border-radius:4px; font-size:12px; color:var(--muted); line-height:1.6; border-left:2px solid var(--gold-dim); }
+    <b>All Documents - GET /documents</b><br />
+    <button onclick="getAllDocs()">Fetch All</button>
+    <pre id="alldocs_res"></pre>
 
-  /* Pipeline pill row */
-  .pipeline { display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin:10px 0; }
-  .pill { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:5px 13px; font-size:11px; font-family:'DM Mono',monospace; }
-  .arrow { color:var(--gold-dim); font-size:13px; padding:0 2px; }
-</style>
-</head>
-<body>
+    <b>Get / Delete One Document</b><br />
+    Document ID: <input type="text" id="single_id" size="40" /><br />
+    <button onclick="getDoc()">Get</button>
+    <button onclick="deleteDoc()">Delete</button>
+    <pre id="single_res"></pre>
+    <hr />
 
-<header class="topbar">
-  <div class="logo"><div class="logo-icon">F</div>FinDoc</div>
-  <div class="topbar-right">
-    <div class="user-badge">Signed in as <span id="whoami">—</span></div>
-    <button class="logout-btn" onclick="logout()">Sign Out</button>
-  </div>
-</header>
+    <!-- METADATA SEARCH -->
+    <h3 id="search">Metadata Search - GET /documents/search</h3>
+    <small>Plain SQL filter - not AI-powered.</small><br /><br />
+    Company: <input type="text" id="s_company" placeholder="Acme" />
+    Type:
+    <select id="s_type">
+      <option value="">Any</option>
+      <option value="invoice">Invoice</option>
+      <option value="report">Report</option>
+      <option value="contract">Contract</option></select
+    ><br />
+    <button onclick="searchDocs()">Search</button>
+    <pre id="search_res"></pre>
+    <hr />
 
-<nav class="sidebar">
-  <div class="nav-label">Step 1 — Core</div>
-  <div class="nav-item active" onclick="show('roles')">🔑&nbsp; Roles</div>
-  <div class="nav-item" onclick="show('documents')">📄&nbsp; Documents</div>
-  <div class="nav-item" onclick="show('metasearch')">🔍&nbsp; Metadata Search</div>
-  <div class="nav-label">Step 2 — RAG</div>
-  <div class="nav-item" onclick="show('ragsearch')">🧠&nbsp; Semantic Search</div>
-  <div class="nav-item" onclick="show('ragcontext')">📚&nbsp; View Chunks</div>
-  <div class="nav-item" onclick="show('ragmanage')">⚙️&nbsp; Manage Embeddings</div>
-</nav>
+    <!-- SEMANTIC SEARCH -->
+    <h3 id="rag_search">Semantic Search - POST /rag/search</h3>
+    <small>
+      MMR search: finds relevant chunks that are also diverse from each other.
+      No need to index manually - upload already does it. </small
+    ><br /><br />
+    Query:
+    <input
+      type="text"
+      id="rag_query"
+      size="60"
+      placeholder="e.g. financial risk from high debt ratio"
+    /><br />
+    Top K: <input type="number" id="rag_topk" value="5" size="4" /><br />
+    <button onclick="ragSearch()">Search</button>
+    <pre id="rag_res"></pre>
 
-<main class="main">
+    <b>Re-index a document - POST /rag/index-document</b><br />
+    <small
+      >Only needed if you want to refresh embeddings of an existing doc.</small
+    ><br />
+    Document ID: <input type="text" id="idx_id" size="40" /><br />
+    <button onclick="reindexDoc()">Re-index</button>
+    <pre id="idx_res"></pre>
 
-  <!-- ── ROLES ── -->
-  <div class="panel active" id="panel-roles">
-    <h2 class="panel-title">Roles &amp; Permissions</h2>
-    <p class="panel-desc">Create roles, assign them to users by name, and view your own permissions.</p>
+    <b>Remove embeddings - DELETE /rag/remove-document/{id}</b><br />
+    Document ID: <input type="text" id="rm_id" size="40" /><br />
+    <button onclick="removeEmbeddings()">Remove</button>
+    <pre id="rm_res"></pre>
+    <hr />
 
-    <div class="card">
-      <div class="card-title">Create Role — POST /roles/create</div>
-      <div class="field"><label>Role Name</label><input id="role_name" placeholder="e.g. Auditor"></div>
-      <div class="field"><label>Permissions (comma-separated)</label><input id="role_perms" placeholder="e.g. view,download,edit"></div>
-      <div class="btn-row"><button class="btn btn-primary" onclick="createRole()">Create Role</button></div>
-      <div class="res" id="role_res"></div>
-    </div>
+    <!-- VIEW CHUNKS -->
+    <h3 id="rag_chunks">View Document Chunks - GET /rag/context/{id}</h3>
+    <small>See what FAISS stored for a document.</small><br /><br />
+    Document ID: <input type="text" id="ctx_id" size="40" /><br />
+    <button onclick="getChunks()">Get Chunks</button>
+    <pre id="ctx_res"></pre>
 
-    <div class="card">
-      <div class="card-title">Assign Role to User — POST /users/assign-role</div>
-      <div class="field"><label>Username</label><input id="assign_username" placeholder="e.g. john"></div>
-      <div class="field"><label>Role Name</label><input id="assign_rolename" placeholder="e.g. Auditor"></div>
-      <div class="btn-row"><button class="btn btn-primary" onclick="assignRole()">Assign Role</button></div>
-      <div class="res" id="assign_res"></div>
-    </div>
+    <!-- JAVASCRIPT -->
+    <script>
+      const BASE = "http://127.0.0.1:8000";
+      const token = sessionStorage.getItem("token");
+      const username = sessionStorage.getItem("username");
 
-    <div class="card">
-      <div class="card-title">My Roles &amp; Permissions — GET /users/me/roles|permissions</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Automatically uses your logged-in account.</p>
-      <div class="btn-row">
-        <button class="btn btn-ghost" onclick="getMyRoles()">My Roles</button>
-        <button class="btn btn-ghost" onclick="getMyPerms()">My Permissions</button>
-      </div>
-      <div class="res" id="me_res"></div>
-    </div>
-  </div>
+      if (!token) window.location.href = "login.html";
 
-  <!-- ── DOCUMENTS ── -->
-  <div class="panel" id="panel-documents">
-    <h2 class="panel-title">Documents</h2>
-    <p class="panel-desc">Upload financial documents. Each upload is automatically split into chunks and indexed into ChromaDB for semantic search.</p>
+      document.getElementById("whoami").textContent = username || "?";
 
-    <div class="card">
-      <div class="card-title">Upload — POST /documents/upload</div>
-      <div class="field"><label>Title</label><input id="doc_title" placeholder="Q3 Financial Report"></div>
-      <div class="field"><label>Company Name</label><input id="doc_company" placeholder="Acme Corp"></div>
-      <div class="field"><label>Type</label>
-        <select id="doc_type">
-          <option value="invoice">Invoice</option>
-          <option value="report">Report</option>
-          <option value="contract">Contract</option>
-        </select>
-      </div>
-      <div class="field"><label>Content</label><textarea id="doc_content" placeholder="Paste document text here…"></textarea></div>
-      <div class="btn-row"><button class="btn btn-primary" onclick="uploadDoc()">Upload</button></div>
-      <div class="res" id="upload_res"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">All Documents — GET /documents</div>
-      <div class="btn-row"><button class="btn btn-ghost" onclick="getAllDocs()">Fetch All</button></div>
-      <div class="res" id="alldocs_res"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Get / Delete — GET|DELETE /documents/{id}</div>
-      <div class="field"><label>Document ID</label><input id="single_id" placeholder="paste document_id here"></div>
-      <div class="btn-row">
-        <button class="btn btn-ghost"  onclick="getDoc()">Get</button>
-        <button class="btn btn-danger" onclick="deleteDoc()">Delete</button>
-      </div>
-      <div class="res" id="single_res"></div>
-    </div>
-  </div>
-
-  <!-- ── METADATA SEARCH ── -->
-  <div class="panel" id="panel-metasearch">
-    <h2 class="panel-title">Metadata Search</h2>
-    <p class="panel-desc">Filter documents by company name or type using a plain SQL query. For meaning-based search, use Semantic Search.</p>
-
-    <div class="card">
-      <div class="card-title">GET /documents/search</div>
-      <div class="field"><label>Company Name (optional)</label><input id="s_company" placeholder="Acme"></div>
-      <div class="field"><label>Document Type (optional)</label>
-        <select id="s_type">
-          <option value="">Any type</option>
-          <option value="invoice">Invoice</option>
-          <option value="report">Report</option>
-          <option value="contract">Contract</option>
-        </select>
-      </div>
-      <div class="btn-row"><button class="btn btn-primary" onclick="searchDocs()">Search</button></div>
-      <div class="res" id="search_res"></div>
-    </div>
-  </div>
-
-  <!-- ── SEMANTIC SEARCH ── -->
-  <div class="panel" id="panel-ragsearch">
-    <h2 class="panel-title">Semantic Search</h2>
-    <p class="panel-desc">Ask a question in plain English. Finds relevant document chunks by meaning — not just keyword matching.</p>
-
-    <div class="card" style="background:rgba(201,168,76,.04);border-color:rgba(201,168,76,.2)">
-      <div class="pipeline">
-        <span class="pill">Query</span><span class="arrow">→</span>
-        <span class="pill">Embed</span><span class="arrow">→</span>
-        <span class="pill">Top 20 chunks</span><span class="arrow">→</span>
-        <span class="pill">CrossEncoder rerank</span><span class="arrow">→</span>
-        <span class="pill">Top K results</span>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">POST /rag/search</div>
-      <div class="field"><label>Query</label><textarea id="rag_query" placeholder="e.g. financial risk related to high debt ratio" style="height:70px"></textarea></div>
-      <div class="field"><label>Top K (after reranking)</label><input type="number" id="rag_topk" value="5" min="1" max="20"></div>
-      <div class="btn-row"><button class="btn btn-rag" onclick="ragSearch()">🧠 Search</button></div>
-      <div id="rag_results"></div>
-    </div>
-  </div>
-
-  <!-- ── VIEW CHUNKS ── -->
-  <div class="panel" id="panel-ragcontext">
-    <h2 class="panel-title">View Chunks</h2>
-    <p class="panel-desc">Inspect what ChromaDB has stored for a document — all chunks in order.</p>
-
-    <div class="card">
-      <div class="card-title">GET /rag/context/{document_id}</div>
-      <div class="field"><label>Document ID</label><input id="ctx_id" placeholder="paste document_id here"></div>
-      <div class="btn-row"><button class="btn btn-ghost" onclick="getChunks()">Get Chunks</button></div>
-      <div id="ctx_results"></div>
-    </div>
-  </div>
-
-  <!-- ── MANAGE EMBEDDINGS ── -->
-  <div class="panel" id="panel-ragmanage">
-    <h2 class="panel-title">Manage Embeddings</h2>
-    <p class="panel-desc">Re-index a document if content changed, or remove its embeddings from ChromaDB without deleting the document.</p>
-
-    <div class="card">
-      <div class="card-title">Re-index — POST /rag/index-document</div>
-      <div class="field"><label>Document ID</label><input id="ridx_id" placeholder="paste document_id here"></div>
-      <div class="btn-row"><button class="btn btn-rag" onclick="reindexDoc()">Re-index</button></div>
-      <div class="res" id="ridx_res"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Remove Embeddings — DELETE /rag/remove-document/{id}</div>
-      <div class="field"><label>Document ID</label><input id="rm_id" placeholder="paste document_id here"></div>
-      <div class="btn-row"><button class="btn btn-danger" onclick="removeEmbeddings()">Remove from ChromaDB</button></div>
-      <div class="res" id="rm_res"></div>
-    </div>
-  </div>
-
-</main>
-
-<script>
-  const BASE     = "http://127.0.0.1:8000";
-  const token    = sessionStorage.getItem("token");
-  const username = sessionStorage.getItem("username");
-
-  if (!token) window.location.href = "login.html";
-  document.getElementById("whoami").textContent = username || "—";
-
-  function logout() { sessionStorage.clear(); window.location.href = "login.html"; }
-
-  function show(name) {
-    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-    document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
-    document.getElementById("panel-" + name).classList.add("active");
-    document.querySelectorAll(".nav-item").forEach(n => {
-      if (n.getAttribute("onclick") === `show('${name}')`) n.classList.add("active");
-    });
-  }
-
-  async function api(method, path, body, resId) {
-    const opts = { method, headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token } };
-    if (body) opts.body = JSON.stringify(body);
-
-    if (resId) {
-      const el = document.getElementById(resId);
-      if (el) { el.className = "res"; el.textContent = "…"; el.style.display = "block"; }
-    }
-
-    try {
-      const res  = await fetch(BASE + path, opts);
-      const data = await res.json();
-      if (resId) {
-        const el = document.getElementById(resId);
-        if (el) { el.textContent = JSON.stringify(data, null, 2); el.className = "res " + (res.ok ? "ok" : "err"); }
+      function logout() {
+        sessionStorage.clear();
+        window.location.href = "login.html";
       }
-      if (!res.ok) throw data;
-      return data;
-    } catch (err) {
-      if (resId) {
-        const el = document.getElementById(resId);
-        if (el) { el.textContent = JSON.stringify(err, null, 2) || String(err); el.className = "res err"; }
+
+      function authHeaders() {
+        return {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        };
       }
-      return null;
-    }
-  }
 
-  // Roles
-  function createRole() {
-    api("POST", "/roles/create",
-      { name: document.getElementById("role_name").value, permissions: document.getElementById("role_perms").value },
-      "role_res");
-  }
-  function assignRole() {
-    api("POST", "/users/assign-role",
-      { username: document.getElementById("assign_username").value, role_name: document.getElementById("assign_rolename").value },
-      "assign_res");
-  }
-  function getMyRoles() { api("GET", "/users/me/roles",       null, "me_res"); }
-  function getMyPerms() { api("GET", "/users/me/permissions", null, "me_res"); }
+      async function api(method, path, body, preId) {
+        const opts = { method, headers: authHeaders() };
+        if (body) opts.body = JSON.stringify(body);
 
-  // Documents
-  function uploadDoc() {
-    api("POST", "/documents/upload", {
-      title:         document.getElementById("doc_title").value,
-      company_name:  document.getElementById("doc_company").value,
-      document_type: document.getElementById("doc_type").value,
-      content:       document.getElementById("doc_content").value
-    }, "upload_res");
-  }
-  function getAllDocs() { api("GET",    "/documents",                                         null, "alldocs_res"); }
-  function getDoc()     { api("GET",    "/documents/" + document.getElementById("single_id").value, null, "single_res"); }
-  function deleteDoc()  { api("DELETE", "/documents/" + document.getElementById("single_id").value, null, "single_res"); }
-  function searchDocs() {
-    const c = document.getElementById("s_company").value;
-    const t = document.getElementById("s_type").value;
-    const q = [c && "company_name=" + encodeURIComponent(c), t && "document_type=" + encodeURIComponent(t)].filter(Boolean).join("&");
-    api("GET", "/documents/search" + (q ? "?" + q : ""), null, "search_res");
-  }
+        const res = await fetch(BASE + path, opts);
+        const data = await res.json();
+        document.getElementById(preId).textContent = JSON.stringify(
+          data,
+          null,
+          2,
+        );
+        return data;
+      }
 
-  // RAG search — renders rich cards instead of raw JSON
-  async function ragSearch() {
-    const query = document.getElementById("rag_query").value.trim();
-    const top_k = parseInt(document.getElementById("rag_topk").value) || 5;
-    if (!query) return;
+      // Roles
+      function createRole() {
+        api(
+          "POST",
+          "/roles/create",
+          {
+            name: document.getElementById("role_name").value,
+            permissions: document.getElementById("role_perms").value,
+          },
+          "role_res",
+        );
+      }
+      function assignRole() {
+        api(
+          "POST",
+          "/users/assign-role",
+          {
+            user_id: +document.getElementById("assign_uid").value,
+            role_id: +document.getElementById("assign_rid").value,
+          },
+          "assign_res",
+        );
+      }
+      function getUserRoles() {
+        api(
+          "GET",
+          "/users/" + document.getElementById("view_uid").value + "/roles",
+          null,
+          "view_res",
+        );
+      }
+      function getUserPerms() {
+        api(
+          "GET",
+          "/users/" +
+            document.getElementById("view_uid").value +
+            "/permissions",
+          null,
+          "view_res",
+        );
+      }
 
-    const area = document.getElementById("rag_results");
-    area.innerHTML = "<div style='color:var(--muted);font-size:13px;margin-top:12px'>Searching…</div>";
+      // Documents
+      function uploadDoc() {
+        api(
+          "POST",
+          "/documents/upload",
+          {
+            title: document.getElementById("doc_title").value,
+            company_name: document.getElementById("doc_company").value,
+            document_type: document.getElementById("doc_type").value,
+            content: document.getElementById("doc_content").value,
+          },
+          "upload_res",
+        );
+      }
+      function getAllDocs() {
+        api("GET", "/documents", null, "alldocs_res");
+      }
+      function getDoc() {
+        api(
+          "GET",
+          "/documents/" + document.getElementById("single_id").value,
+          null,
+          "single_res",
+        );
+      }
+      function deleteDoc() {
+        api(
+          "DELETE",
+          "/documents/" + document.getElementById("single_id").value,
+          null,
+          "single_res",
+        );
+      }
 
-    const data = await api("POST", "/rag/search", { query, top_k }, null);
-    if (!data || !data.results) {
-      area.innerHTML = "<div class='res err' style='display:block'>Search failed.</div>";
-      return;
-    }
-    if (!data.results.length) {
-      area.innerHTML = "<div class='res ok' style='display:block'>No results found.</div>";
-      return;
-    }
-    area.innerHTML =
-      `<div style="font-size:12px;color:var(--muted);margin:14px 0 6px;font-family:'DM Mono',monospace">${data.results.length} results for "${query}"</div>` +
-      data.results.map((r, i) => `
-        <div class="result-card">
-          <div class="result-card-title">#${i+1} — ${r.title}</div>
-          <div class="result-card-meta">${r.company_name} · ${r.document_type} · chunk ${r.chunk_index}</div>
-          <div class="result-card-score">Rerank score: <span>${r.rerank_score}</span></div>
-          <div class="result-card-chunk">${r.chunk_text}</div>
-        </div>`).join("");
-  }
+      function searchDocs() {
+        const c = document.getElementById("s_company").value;
+        const t = document.getElementById("s_type").value;
+        const q = [
+          c && "company_name=" + encodeURIComponent(c),
+          t && "document_type=" + encodeURIComponent(t),
+        ]
+          .filter(Boolean)
+          .join("&");
+        api(
+          "GET",
+          "/documents/search" + (q ? "?" + q : ""),
+          null,
+          "search_res",
+        );
+      }
 
-  // RAG chunks — renders cards
-  async function getChunks() {
-    const id   = document.getElementById("ctx_id").value;
-    const area = document.getElementById("ctx_results");
-    area.innerHTML = "<div style='color:var(--muted);font-size:13px;margin-top:12px'>Loading…</div>";
-
-    const data = await api("GET", "/rag/context/" + id, null, null);
-    if (!data || !data.chunks) {
-      area.innerHTML = "<div class='res err' style='display:block'>" + (data?.detail || "Not found.") + "</div>";
-      return;
-    }
-    area.innerHTML =
-      `<div style="font-size:12px;color:var(--muted);margin:14px 0 6px;font-family:'DM Mono',monospace">${data.total_chunks} chunks stored</div>` +
-      data.chunks.map(c => `
-        <div class="result-card">
-          <div class="result-card-meta">Chunk ${c.chunk_index} — ${c.chunk_id}</div>
-          <div class="result-card-chunk">${c.text}</div>
-        </div>`).join("");
-  }
-
-  // RAG manage
-  function reindexDoc()      { api("POST",   "/rag/index-document?document_id=" + encodeURIComponent(document.getElementById("ridx_id").value), null, "ridx_res"); }
-  function removeEmbeddings(){ api("DELETE", "/rag/remove-document/" + document.getElementById("rm_id").value, null, "rm_res"); }
-</script>
-</body>
+      // RAG
+      function ragSearch() {
+        api(
+          "POST",
+          "/rag/search",
+          {
+            query: document.getElementById("rag_query").value,
+            top_k: +document.getElementById("rag_topk").value,
+          },
+          "rag_res",
+        );
+      }
+      function reindexDoc() {
+        api(
+          "POST",
+          "/rag/index-document?document_id=" +
+            encodeURIComponent(document.getElementById("idx_id").value),
+          null,
+          "idx_res",
+        );
+      }
+      function removeEmbeddings() {
+        api(
+          "DELETE",
+          "/rag/remove-document/" + document.getElementById("rm_id").value,
+          null,
+          "rm_res",
+        );
+      }
+      function getChunks() {
+        api(
+          "GET",
+          "/rag/context/" + document.getElementById("ctx_id").value,
+          null,
+          "ctx_res",
+        );
+      }
+    </script>
+  </body>
 </html>

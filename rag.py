@@ -3,21 +3,18 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from sentence_transformers import CrossEncoder
 
-CHROMA_PATH     = "./chroma_db"
-COLLECTION_NAME = "financial_docs"
-
 splitter = RecursiveCharacterTextSplitter(
     chunk_size    = 1000,
     chunk_overlap = 150,
-    separators    = ["\n\n", "\n", ". ", " ", ""]
+    separators  = ["\n\n", "\n", ". ", " ", ""]
 )
 
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 vector_store = Chroma(
-    collection_name    = COLLECTION_NAME,
+    collection_name = "financial_docs",
     embedding_function = embeddings,
-    persist_directory  = CHROMA_PATH
+    persist_directory  = "./chroma_db"
 )
 
 retriever = vector_store.as_retriever(
@@ -31,22 +28,21 @@ reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 def index_document_content(document_id, title, company_name, document_type, content) -> int:
     doc_id = int(document_id) 
     docs = splitter.create_documents(
-        texts     = [content],
+        texts = [content],
         metadatas = [{"document_id": doc_id, "title": title,
-                      "company_name": company_name, "document_type": document_type}]
-    )
+                      "company_name": company_name, "document_type": document_type}])
     for i, doc in enumerate(docs):
         doc.metadata["chunk_index"] = i
 
-    ids = [f"{doc_id}_chunk_{i}" for i in range(len(docs))]
-    vector_store.add_documents(documents=docs, ids=ids)
+    chunk_ids = [f"{doc_id}_chunk_{i}" for i in range(len(docs))]
+    vector_store.add_documents(documents=docs, ids=chunk_ids)
     return len(docs)
 
 
 def remove_document_embeddings(document_id) -> int:
     doc_id = int(document_id) 
     result = vector_store.get(where={"document_id": doc_id})
-    ids    = result.get("ids", [])
+    ids  = result.get("ids", [])
     if not ids:
         return 0
     vector_store.delete(ids=ids)
@@ -58,19 +54,19 @@ def semantic_search(query: str, top_k: int = 5) -> list[dict]:
     if not retrieved_docs:
         return []
 
-    pairs  = [(query, doc.page_content) for doc in retrieved_docs]
+    pairs = [(query, doc.page_content) for doc in retrieved_docs]
     scores = reranker.predict(pairs).tolist()
 
     ranked = sorted(zip(retrieved_docs, scores), key=lambda x: x[1], reverse=True)[:top_k]
 
     return [
         {
-            "chunk_text":    doc.page_content,
-            "document_id":   doc.metadata.get("document_id"),
-            "title":         doc.metadata.get("title"),
+            "chunk_text": doc.page_content,
+            "document_id":  doc.metadata.get("document_id"),
+            "title":    doc.metadata.get("title"),
             "company_name":  doc.metadata.get("company_name"),
             "document_type": doc.metadata.get("document_type"),
-            "chunk_index":   doc.metadata.get("chunk_index"),
+            "chunk_index": doc.metadata.get("chunk_index"),
             "rerank_score":  round(score, 4),
         }
         for doc, score in ranked
@@ -80,10 +76,10 @@ def semantic_search(query: str, top_k: int = 5) -> list[dict]:
 def get_document_chunks(document_id) -> list[dict]:
     doc_id = int(document_id) 
     result = vector_store.get(
-        where   = {"document_id": doc_id},
+        where = {"document_id": doc_id},
         include = ["documents", "metadatas"]
     )
-    ids       = result.get("ids", [])
+    ids  = result.get("ids", [])
     documents = result.get("documents", [])
     metadatas = result.get("metadatas", [])
 
@@ -98,3 +94,4 @@ def get_document_chunks(document_id) -> list[dict]:
         {"chunk_id": cid, "chunk_index": meta.get("chunk_index"), "text": text}
         for cid, text, meta in combined
     ]
+    
