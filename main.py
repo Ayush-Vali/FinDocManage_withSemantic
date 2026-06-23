@@ -10,7 +10,7 @@ from rag import index_document_content, remove_document_embeddings, semantic_sea
 
 class RegisterInput(BaseModel):
     username: str
-    email: str
+    email:    str
     password: str
 
 class LoginInput(BaseModel):
@@ -18,18 +18,18 @@ class LoginInput(BaseModel):
     password: str
 
 class RoleCreateInput(BaseModel):
-    name: str
+    name:        str
     permissions: str
 
 class AssignRoleInput(BaseModel):
-    username: str
-    role_name: str
+    user_id: int
+    role_id: int
 
 class DocumentUploadInput(BaseModel):
-    title: str
-    company_name: str
+    title:         str
+    company_name:  str
     document_type: str
-    content:  str
+    content:       str
 
 class RAGSearchInput(BaseModel):
     query: str
@@ -46,7 +46,7 @@ app.add_middleware(
 )
 
 
-#  Auth 
+# ── Auth ──────────────────────────────────────────────────────────
 
 @app.post("/auth/register")
 def register(data: RegisterInput, db: Session = Depends(get_db)):
@@ -70,17 +70,17 @@ def login(data: LoginInput, db: Session = Depends(get_db)):
 
     return {
         "message":  "Login successful!",
-        "token":  create_jwt_token(user.id, user.username),
+        "token":    create_jwt_token(user.id, user.username),
         "username": user.username
     }
 
 
-#  Roles 
+# ── Roles ─────────────────────────────────────────────────────────
 
 @app.post("/roles/create")
 def create_role(
-    data: RoleCreateInput,
-    db:Session = Depends(get_db),
+    data:         RoleCreateInput,
+    db:           Session = Depends(get_db),
     current_user: UserDB  = Depends(get_current_user)
 ):
     if db.query(RoleDB).filter(RoleDB.name == data.name).first():
@@ -94,155 +94,136 @@ def create_role(
 
 
 @app.post("/users/assign-role")
-def assign_role(
-    data: AssignRoleInput,
-    db: Session = Depends(get_db)
-):
-    user = db.query(UserDB).filter(UserDB.username == data.username).first()
-    role = db.query(RoleDB).filter(RoleDB.name == data.role_name).first()
-
+def assign_role(data: AssignRoleInput, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
+    user = db.query(UserDB).filter(UserDB.id == data.user_id).first()
+    role = db.query(RoleDB).filter(RoleDB.id == data.role_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail=f"User '{data.username}' not found.")
+        raise HTTPException(status_code=404, detail="User not found.")
     if not role:
-        raise HTTPException(status_code=404, detail=f"Role '{data.role_name}' not found.")
-
-    already = db.query(UserRoleDB).filter(
-        UserRoleDB.user_id == user.id,
-        UserRoleDB.role_id == role.id
-    ).first()
+        raise HTTPException(status_code=404, detail="Role not found.")
+    already = db.query(UserRoleDB).filter(UserRoleDB.user_id == data.user_id, UserRoleDB.role_id == data.role_id).first()
     if already:
-        return {"message": f"'{data.username}' already has role '{data.role_name}'."}
-
-    db.add(UserRoleDB(user_id=user.id, role_id=role.id))
+        return {"message": "Role already assigned."}
+    db.add(UserRoleDB(user_id=data.user_id, role_id=data.role_id))
     db.commit()
-    return {"message": f"Role '{role.name}' assigned to '{user.username}'."}
+    return {"message": f"Role '{role.name}' assigned to '{user.username}'!"}
 
 
 @app.get("/users/{user_id}/roles")
-def get_user_roles(
-    user_id: int,
-    db:  Session = Depends(get_db)
-):
-    """See all roles a user has"""
+def get_user_roles(user_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     user = db.query(UserDB).filter(UserDB.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
-
-    roles = [
-        {"role_id": ur.role.id, "role_name": ur.role.name}
-        for ur in user.role_assignments
-    ]
-    return {"user": user.username, "roles": roles}
+    return {"user": user.username, "roles": [{"role_id": ur.role.id, "role_name": ur.role.name} for ur in user.role_assignments]}
 
 
 @app.get("/users/{user_id}/permissions")
-def get_user_permissions(
-    user_id:  int,
-    db: Session = Depends(get_db)):
-
+def get_user_permissions(user_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     user = db.query(UserDB).filter(UserDB.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
-
-    # Collect all permissions from all roles
     all_permissions = set()
     for ur in user.role_assignments:
-        perms = ur.role.permissions.split(",")   
-        all_permissions.update(perms)
-
+        all_permissions.update(ur.role.permissions.split(","))
     return {"user": user.username, "permissions": list(all_permissions)}
 
 
-#  Documents 
+# ── Documents ─────────────────────────────────────────────────────
 
 @app.post("/documents/upload")
 def upload_document(
-    data:  DocumentUploadInput,
-    db:  Session = Depends(get_db),
+    data:         DocumentUploadInput,
+    db:           Session = Depends(get_db),
     current_user: UserDB  = Depends(get_current_user)
 ):
     doc = DocumentDB(
-        title  = data.title,
+        title         = data.title,
         company_name  = data.company_name,
         document_type = data.document_type,
-        content   = data.content,
-        uploaded_by = current_user.id
+        content       = data.content,
+        uploaded_by   = current_user.id
     )
     db.add(doc)
     db.commit()
     db.refresh(doc)
 
     chunks_created = index_document_content(
-        document_id = doc.document_id,
-        title  = doc.title,
+        document_id   = doc.document_id,
+        title         = doc.title,
         company_name  = doc.company_name,
         document_type = doc.document_type,
-        content  = doc.content
+        content       = doc.content
     )
     return {
-        "message":  "Document uploaded and indexed!",
+        "message":        "Document uploaded and indexed!",
         "document_id":    doc.document_id,
-        "title":  doc.title,
+        "title":          doc.title,
         "chunks_created": chunks_created
     }
 
 
 @app.get("/documents")
-def list_documents(db: Session = Depends(get_db)):
+def get_all_documents(db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     docs = db.query(DocumentDB).all()
     return [
         {
             "document_id":   d.document_id,
-            "title":     d.title,
+            "title":         d.title,
             "company_name":  d.company_name,
             "document_type": d.document_type,
             "uploaded_by":   d.uploader.username if d.uploader else "?",
-            "created_at":  d.created_at.isoformat()
+            "created_at":    d.created_at.isoformat()
         }
         for d in docs
     ]
 
 
+# !! CRITICAL: /documents/search MUST come before /documents/{document_id}
+# FastAPI matches routes top-to-bottom. If /{document_id} is first,
+# the word "search" gets captured as a document_id and the wrong route runs.
 @app.get("/documents/search")
 def search_documents(
-    company_name = None, document_type= None,
-    db:  Session = Depends(get_db)):
-    
+    company_name:  str | None = None,
+    document_type: str | None = None,
+    db:            Session = Depends(get_db),
+    current_user:  UserDB  = Depends(get_current_user)
+):
     query = db.query(DocumentDB)
     if company_name:
         query = query.filter(DocumentDB.company_name.ilike(f"%{company_name}%"))
     if document_type:
         query = query.filter(DocumentDB.document_type == document_type)
     return [
-        {   "document_id": d.document_id,
-            "title":  d.title,
-            "company_name": d.company_name,
+        {
+            "document_id":   d.document_id,
+            "title":         d.title,
+            "company_name":  d.company_name,
             "document_type": d.document_type,
-            "uploaded_by": d.uploader.username if d.uploader else "?",
-            "created_at": d.created_at.isoformat()
+            "uploaded_by":   d.uploader.username if d.uploader else "?",
+            "created_at":    d.created_at.isoformat()
         }
         for d in query.all()
     ]
 
 
 @app.get("/documents/{document_id}")
-def get_document(document_id: int, db: Session = Depends(get_db)):
+def get_document(document_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     doc = db.query(DocumentDB).filter(DocumentDB.document_id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
     return {
         "document_id":   doc.document_id,
-        "title":   doc.title,
+        "title":         doc.title,
         "company_name":  doc.company_name,
         "document_type": doc.document_type,
-        "content":    doc.content,
+        "content":       doc.content,
         "uploaded_by":   doc.uploader.username if doc.uploader else "?",
-        "created_at":   doc.created_at.isoformat()
+        "created_at":    doc.created_at.isoformat()
     }
 
 
 @app.delete("/documents/{document_id}")
-def delete_document(document_id: int, db: Session = Depends(get_db)):
+def delete_document(document_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     doc = db.query(DocumentDB).filter(DocumentDB.document_id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -254,10 +235,14 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
     return {"message": f"'{title}' deleted.", "chunks_removed": removed}
 
 
-#  RAG 
+# ── RAG ───────────────────────────────────────────────────────────
 
 @app.post("/rag/index-document")
-def reindex_document( document_id:  int, db:  Session = Depends(get_db)):
+def reindex_document(
+    document_id:  int,
+    db:           Session = Depends(get_db),
+    current_user: UserDB  = Depends(get_current_user)
+):
     doc = db.query(DocumentDB).filter(DocumentDB.document_id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -271,7 +256,7 @@ def reindex_document( document_id:  int, db:  Session = Depends(get_db)):
 
 
 @app.delete("/rag/remove-document/{document_id}")
-def remove_embeddings_route(document_id: int):
+def remove_embeddings_route(document_id: int, current_user: UserDB = Depends(get_current_user)):
     removed = remove_document_embeddings(document_id)
     if removed == 0:
         raise HTTPException(status_code=404, detail="No embeddings found for this document.")
@@ -279,15 +264,14 @@ def remove_embeddings_route(document_id: int):
 
 
 @app.post("/rag/search")
-def rag_search(data: RAGSearchInput):
+def rag_search(data: RAGSearchInput, current_user: UserDB = Depends(get_current_user)):
     results = semantic_search(query=data.query, top_k=data.top_k)
     return {"query": data.query, "results": results}
 
 
 @app.get("/rag/context/{document_id}")
-def get_context(document_id: int):
+def get_context(document_id: int, current_user: UserDB = Depends(get_current_user)):
     chunks = get_document_chunks(document_id)
     if not chunks:
         raise HTTPException(status_code=404, detail="No chunks found for this document.")
     return {"document_id": document_id, "total_chunks": len(chunks), "chunks": chunks}
-
